@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shopify Store Manager</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>Shopify Store Manager</h1>
+            <p>Easily manage your connected stores and their credentials.</p>
+        </header>
+
+        <section class="add-store">
+            <div class="card">
+                <h2>Connect New Store</h2>
+                <form id="storeForm">
+                    <div class="input-group">
+                        <label for="shop">Shop Domain</label>
+                        <input type="text" id="shop" placeholder="my-store.myshopify.com" required>
+                    </div>
+                    <div class="input-group">
+                        <label for="accessToken">Admin API Access Token</label>
+                        <input type="password" id="accessToken" placeholder="shpat_xxxxxxxxxxxxxxxx" required>
+                        <small class="hint">Note: This MUST be an <strong>Admin API</strong> token, not a Storefront
+                            token.</small>
+                    </div>
+                    <button type="submit" id="submitBtn">Connect Store</button>
+                </form>
+            </div>
+        </section>
+
+        <section class="store-list" id="storeListSection">
+            <h2>Your Stores</h2>
+            <div id="storesGrid" class="grid">
+                <!-- Stores will be loaded here -->
+            </div>
+        </section>
+
+        <section class="products-view" id="productsView" style="display: none;">
+            <div class="header-actions">
+                <h2 id="viewingShop">Products</h2>
+                <button onclick="backToStores()" class="btn-secondary small">Back to Stores</button>
+            </div>
+            <div id="productsGrid" class="grid">
+                <!-- Products will be loaded here -->
+            </div>
+        </section>
+    </div>
+
+    <script>
+        const storeForm = document.getElementById('storeForm');
+        const storesGrid = document.getElementById('storesGrid');
+        const storeListSection = document.getElementById('storeListSection');
+        const productsView = document.getElementById('productsView');
+        const productsGrid = document.getElementById('productsGrid');
+        const viewingShop = document.getElementById('viewingShop');
+
+        async function fetchStores() {
+            const response = await fetch('/api/stores');
+            const stores = await response.json();
+
+            if (stores.length === 0) {
+                storesGrid.innerHTML = '<p class="text-muted">No stores connected yet.</p>';
+                return;
+            }
+
+            storesGrid.innerHTML = stores.map(store => `
+                <div class="card store-card">
+                    <h3>${store.shop}</h3>
+                    <p>Installed: ${new Date(store.installedAt).toLocaleDateString()}</p>
+                    <div class="actions">
+                        <button onclick="showProducts('${store.shop}')" class="btn-secondary">View Products</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function showProducts(shop) {
+            storeListSection.style.display = 'none';
+            document.querySelector('.add-store').style.display = 'none';
+            productsView.style.display = 'block';
+            viewingShop.textContent = `Products for ${shop}`;
+            productsGrid.innerHTML = '<p>Loading products...</p>';
+
+            try {
+                const response = await fetch(`/api/products?shop=${shop}`);
+                const data = await response.json();
+
+                if (data.error) {
+                    productsGrid.innerHTML = `<p class="error">Error: ${data.error}</p>`;
+                    return;
+                }
+
+                const products = data.products;
+                if (products.length === 0) {
+                    productsGrid.innerHTML = '<p>No products found in this store.</p>';
+                    return;
+                }
+
+                productsGrid.innerHTML = products.map(product => `
+                    <div class="card product-card">
+                        <img src="${product.imageUrl}" alt="${product.name}" class="product-image">
+                        <div class="product-info">
+                            <h3>${product.name}</h3>
+                            <p class="price">${product.price}</p>
+                            <a href="${product.url}" target="_blank" class="btn-link">View in Shopify</a>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (err) {
+                productsGrid.innerHTML = '<p class="error">Failed to fetch products.</p>';
+            }
+        }
+
+        function backToStores() {
+            productsView.style.display = 'none';
+            storeListSection.style.display = 'block';
+            document.querySelector('.add-store').style.display = 'block';
+        }
+
+        storeForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const shop = document.getElementById('shop').value;
+            const accessToken = document.getElementById('accessToken').value;
+            const btn = document.getElementById('submitBtn');
+
+            btn.disabled = true;
+            btn.textContent = 'Connecting...';
+
+            try {
+                const response = await fetch('/api/stores', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ shop, accessToken })
+                });
+
+                if (response.ok) {
+                    alert('Store connected successfully!');
+                    storeForm.reset();
+                    await fetchStores();
+                    showProducts(shop); // Automatically show products after connection
+                } else {
+                    const error = await response.json();
+                    alert('Error: ' + error.error);
+                }
+            } catch (err) {
+                alert('Connection failed');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Connect Store';
+            }
+        });
+
+        fetchStores();
+    </script>
+</body>
+
+</html>
