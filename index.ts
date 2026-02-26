@@ -39,7 +39,8 @@ app.post('/api/stores', async (req: Request, res: Response) => {
         );
         res.json({ message: 'Store saved successfully', store });
     } catch (error: any) {
-        console.error('Save Store Error:', error);
+        console.error('Save Store Error - Request Body:', { shop, hasToken: !!accessToken });
+        console.error('Save Store Error - Details:', error);
         res.status(500).json({ error: 'Failed to save store', details: error.message });
     }
 });
